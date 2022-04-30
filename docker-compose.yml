@@ -1,0 +1,10 @@
+version: '3.4'
+
+services:
+  tj_worker:
+    image: tjdataworker
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - .:/usr/src/app
