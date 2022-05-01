@@ -26,12 +26,15 @@ steps:
 - task: AzureCLI@2
   displayName: 'Azure CLI - Create DevOps Firewall Rule'
   inputs:
-    azureSubscription: $(AZ_SUBSCRIPTION)
+    azureSubscription: $AZ_SUBSCRIPTION
     scriptType: pscore
     scriptLocation: inlineScript
-    inlineScript: az sql server firewall-rule create --name "devopsDeployment" --resource-group $(AZ_RESOURCEGROUP) --server $(AZ_SERVER) --start-ip-address $env:IPaddress --end-ip-address $env:IPaddress
+    inlineScript: az sql server firewall-rule create --name "devopsDeployment" --resource-group $AZ_RESOURCEGROUP --server $AZ_SERVER --start-ip-address $env:IPaddress --end-ip-address $env:IPaddress
   env:
     IPaddress: $(Current_IP)
+    AZ_SUBSCRIPTION: $(AZ_SUBSCRIPTION)
+    AZ_RESOURCEGROUP: $(AZ_RESOURCEGROUP)
+    AZ_SERVER: $(AZ_SERVER)
 
 - script: |
     python -m pip install --upgrade pip
@@ -57,7 +60,11 @@ steps:
 - task: AzureCLI@2
   displayName: 'Azure CLI - Delete DevOps Firewall Rule'
   inputs:
-    azureSubscription: $(AZ_SUBSCRIPTION)
+    azureSubscription: $AZ_SUBSCRIPTION
     scriptType: pscore
     scriptLocation: inlineScript
-    inlineScript: az sql server firewall-rule delete --name "devopsDeployment" --resource-group $(AZ_RESOURCEGROUP) --server $(AZ_SERVER)
+    inlineScript: az sql server firewall-rule delete --name "devopsDeployment" --resource-group $AZ_RESOURCEGROUP --server $AZ_SERVER
+  env:
+    AZ_SUBSCRIPTION: $(AZ_SUBSCRIPTION)
+    AZ_RESOURCEGROUP: $(AZ_RESOURCEGROUP)
+    AZ_SERVER: $(AZ_SERVER)
