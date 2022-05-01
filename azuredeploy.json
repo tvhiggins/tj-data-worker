@@ -1,0 +1,143 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "containerappName": {
+            "defaultValue": "tj-worker-container-app",
+            "type": "String"
+        },
+        "location": {
+            "defaultValue": "eastus",
+            "type": "String"
+        },
+        "environment_name": {
+            "defaultValue": "dev",
+            "type": "String"
+        },
+        "DB_SERVER": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "DB_NAME": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "DB_USER": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "DB_PASSWORD": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "REVISION_NAME": {
+            "defaultValue": "myrevisiontest123",
+            "type": "String"
+        },
+        "IMAGE_NAME": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "ACR_USERNAME": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "ACR_SERVER": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "ACR_PASSWORD": {
+            "defaultValue": "",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "apiVersion": "2021-03-01",
+            "type": "Microsoft.Web/containerApps",
+            "name": "[parameters('containerappName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "kubeEnvironmentId": "[resourceId('Microsoft.Web/kubeEnvironments', parameters('environment_name'))]",
+                "configuration": {
+                    "secrets": [
+                        {
+                            "name": "acr-password",
+                            "value": "[parameters('ACR_PASSWORD')]"
+                        }
+                    ],
+                    "activeRevisionsMode": "Single",
+                    "registries": [
+                        {
+                            "server": "[parameters('ACR_SERVER')]",
+                            "username": "[parameters('ACR_USERNAME')]",
+                            "passwordSecretRef": "acr-password"
+                        }
+                    ],
+                    "ingress": {
+                        "external": true,
+                        "targetPort": 80,
+                        "allowInsecure": false,
+                        "traffic": [
+                            {
+                                "latestRevision": true,
+                                "weight": 100
+                            }
+                        ]
+                    }
+                },
+                "template": {
+                    "revisionSuffix": "[parameters('REVISION_NAME')]",
+                    "containers": [
+                        {
+                            "image": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+                            "name": "simple-hello-world-container",
+                            "resources": {
+                            "cpu": 0.25,
+                            "memory": ".5Gi"
+                                        }
+                        },
+                        {
+                            "name": "tj-worker",
+                            "image": "[parameters('IMAGE_NAME')]",
+                            "env": [
+                                {
+                                    "name": "DB_SERVER",
+                                    "value": "[parameters('DB_SERVER')]"
+                                },
+                                {
+                                    "name": "DB_NAME",
+                                    "value": "[parameters('DB_NAME')]"
+                                },
+                                {
+                                    "name": "DB_USER",
+                                    "value": "[parameters('DB_USER')]"
+                                },
+                                {
+                                    "name": "DB_PASSWORD",
+                                    "value": "[parameters('DB_PASSWORD')]"
+                                },
+                                {
+                                    "name": "HTTP_PORT",
+                                    "value": "80"
+                                }
+                            ],
+                            "resources": {
+                                "cpu": 0.5,
+                                "memory": "1Gi"
+                            }
+                        }
+                    ],
+                    "scale": {
+                        "minReplicas": 1,
+                        "maxReplicas": 1
+                    },
+                    "dapr": {
+                        "enabled": false
+                    }
+                }
+            }
+        }
+    ]
+}

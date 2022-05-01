@@ -1,0 +1,63 @@
+trigger: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+strategy:
+  matrix:
+    Python38:
+      python.version: '3.8'
+
+variables:
+ - name: Current_IP
+   value: nothing
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '$(python.version)'
+  displayName: 'Use Python $(python.version)'
+
+- script: |
+    Current_IP=$(curl ipinfo.io/ip)
+    echo "##vso[task.setvariable variable=Current_IP;]$Current_IP"
+    echo $Current_IP
+  displayName: 'Get DevOps agent IP'
+
+- task: AzureCLI@2
+  displayName: 'Azure CLI - Create DevOps Firewall Rule'
+  inputs:
+    azureSubscription: $(AZ_SUBSCRIPTION)
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: az sql server firewall-rule create --name "devopsDeployment" --resource-group $(AZ_RESOURCEGROUP) --server $(AZ_SERVER) --start-ip-address $env:IPaddress --end-ip-address $env:IPaddress
+  env:
+    IPaddress: $(Current_IP)
+
+- script: |
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    python -m pip install flake8
+  displayName: 'Install dependencies'
+
+- script: |
+    python -m flake8 .
+  displayName: 'Run lint tests'
+
+- script: |
+    pip install pytest pytest-azurepipelines
+    pip install pytest-cov
+    python -m pytest --doctest-modules --junitxml=junit/test-results.xml --cov=. --cov-report=xml
+  env:
+    DB_SERVER: $(DB_SERVER)
+    DB_USERNAME: $(DB_USERNAME)
+    DB_PASSWORD: $(DB_PASSWORD)
+    DB_NAME: $(DB_NAME)
+  displayName: 'Run pytest'
+
+- task: AzureCLI@2
+  displayName: 'Azure CLI - Delete DevOps Firewall Rule'
+  inputs:
+    azureSubscription: $(AZ_SUBSCRIPTION)
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: az sql server firewall-rule delete --name "devopsDeployment" --resource-group $(AZ_RESOURCEGROUP) --server $(AZ_SERVER)
