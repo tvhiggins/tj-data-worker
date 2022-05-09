@@ -91,22 +91,33 @@ class DataParser(object):
 
         swap_id = str.encode(swap_data["id"][2:])
         pair_id = str.encode(swap_data["pair"]["id"][2:])
-        swap_number = int(swap_data["id"][swap_data["id"].find("-") + 1:])
+        swap_number = int(swap_data["id"][swap_data["id"].find("-") + 1 :])
 
         # if swap_id hasn't been parsed, add to fact_swap_objects
         if swap_id not in self.map_block_to_transact_id_to_swap_id[block_number][transact_id]:
             self.map_block_to_transact_id_to_swap_id[block_number][transact_id][swap_id] = True
+
+            # if amounts outside of supported size
+            if (
+                swap_data["amount0In"].find(".") > 18
+                or swap_data["amount0Out"].find(".") > 18
+                or swap_data["amount1In"].find(".") > 18
+                or swap_data["amount1Out"].find(".") > 18
+                or swap_data["amountUSD"].find(".") > 18
+            ):
+                return
+
             self.fact_swap_objects.append(
                 {
                     "transact_id": transact_id,
                     "swap_number": swap_number,
                     "swap_id": swap_id,
                     "pair_id": pair_id,
-                    "amount0_in": swap_data["amount0In"],
-                    "amount0_out": swap_data["amount0Out"],
-                    "amount1_in": swap_data["amount1In"],
-                    "amount1_out": swap_data["amount1Out"],
-                    "amount_usd": swap_data["amountUSD"],
+                    "amount0_in": round(float(swap_data["amount0In"]), 18),
+                    "amount0_out": round(float(swap_data["amount0Out"]), 18),
+                    "amount1_in": round(float(swap_data["amount1In"]), 18),
+                    "amount1_out": round(float(swap_data["amount1Out"]), 18),
+                    "amount_usd": round(float(swap_data["amountUSD"]), 18),
                 }
             )
 
