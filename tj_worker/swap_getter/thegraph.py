@@ -99,7 +99,7 @@ class GraphAPI(object):
                         }
         """
         )
-        block_number_filter = {"blockNumber_gte": block_number}
+        block_number_filter = {"blockNumber_gte": str(block_number)}
         variable_values = {"blockNumberFilter": block_number_filter}
         data = self._send_request(query=query, variable_values=variable_values)
         if "transactions" in data:
@@ -145,7 +145,7 @@ class GraphAPI(object):
         else:
             return None
 
-    def _send_request(self, query: str = None, variable_values: dict = None, max_retries: int = 3) -> dict[str, any]:
+    def _send_request(self, query: str = None, variable_values: dict = None, max_retries: int = 3):
         """Send request to endpoint
 
         Args:
@@ -163,7 +163,7 @@ class GraphAPI(object):
                 exit(1)
             else:
                 logger.info("Retrying Request....")
-                sleep(10)
+                sleep(30)
                 return self._send_request(
                     query=query,
                     variable_values=variable_values,
@@ -177,6 +177,9 @@ class GraphAPI(object):
             logger.error(e)
             return retry()
         except asyncio.CancelledError as e:
+            logger.error(e)
+            return retry()
+        except asyncio.exceptions.TimeoutError as e:
             logger.error(e)
             return retry()
 

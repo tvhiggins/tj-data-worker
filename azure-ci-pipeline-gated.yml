@@ -5,7 +5,7 @@ pool:
 strategy:
   matrix:
     Python38:
-      python.version: '3.8'
+      python.version: '3.10'
 
 variables:
  - name: Current_IP
@@ -26,10 +26,10 @@ steps:
 - task: AzureCLI@2
   displayName: 'Azure CLI - Create DevOps Firewall Rule'
   inputs:
-    azureSubscription: $AZ_SUBSCRIPTION
+    azureSubscription: $(AZ_SUBSCRIPTION)
     scriptType: pscore
     scriptLocation: inlineScript
-    inlineScript: az sql server firewall-rule create --name "devopsDeployment" --resource-group $AZ_RESOURCEGROUP --server $AZ_SERVER --start-ip-address $env:IPaddress --end-ip-address $env:IPaddress
+    inlineScript: az sql server firewall-rule create --name "devopsDeployment" --resource-group $env:AZ_RESOURCEGROUP --server $env:AZ_SERVER --start-ip-address $env:IPaddress --end-ip-address $env:IPaddress
   env:
     IPaddress: $(Current_IP)
     AZ_SUBSCRIPTION: $(AZ_SUBSCRIPTION)
@@ -49,22 +49,24 @@ steps:
 - script: |
     pip install pytest pytest-azurepipelines
     pip install pytest-cov
-    python -m pytest --doctest-modules --junitxml=junit/test-results.xml --cov=. --cov-report=xml
+    python -m pytest -s --doctest-modules --junitxml=junit/test-results.xml --cov=. --cov-report=xml
   env:
     DB_SERVER: $(DB_SERVER)
     DB_USERNAME: $(DB_USERNAME)
     DB_PASSWORD: $(DB_PASSWORD)
     DB_NAME: $(DB_NAME)
+    AZURE_STORAGE_CONN_STR: $(AZURE_STORAGE_CONN_STR)
+    MODULE_TO_RUN: $(MODULE_TO_RUN)
   displayName: 'Run pytest'
 
 - task: AzureCLI@2
   displayName: 'Azure CLI - Delete DevOps Firewall Rule'
   inputs:
-    azureSubscription: $AZ_SUBSCRIPTION
+    azureSubscription: $(AZ_SUBSCRIPTION)
     scriptType: pscore
     scriptLocation: inlineScript
-    inlineScript: az sql server firewall-rule delete --name "devopsDeployment" --resource-group $AZ_RESOURCEGROUP --server $AZ_SERVER
+    inlineScript: az sql server firewall-rule delete --name "devopsDeployment" --resource-group $env:AZ_RESOURCEGROUP --server $env:AZ_SERVER
   env:
-    AZ_SUBSCRIPTION: $(AZ_SUBSCRIPTION)
     AZ_RESOURCEGROUP: $(AZ_RESOURCEGROUP)
     AZ_SERVER: $(AZ_SERVER)
+    AZ_SUBSCRIPTION: $(AZ_SUBSCRIPTION)

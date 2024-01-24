@@ -9,25 +9,22 @@ name: $(Build.BuildId)
 pool:
   vmImage: 'ubuntu-latest'
 
-variables:
-  azureContainerRegistry: $(ACR_URL)
-  azureSubscriptionEndpoint: $(AZ_SUBSCRIPTION)
 
 steps:
-- script: docker login $ACR_URL -u $ACR_NAME -p $DOCKER_LOGIN_PASSWORD
+- script: docker login $ACR_URL -u $ACR_USERNAME -p $ACR_KEY
   env:
-    DOCKER_LOGIN_PASSWORD: $(ACR_KEY)
+    ACR_KEY: $(ACR_KEY)
     ACR_URL: $(ACR_URL)
     AZ_SUBSCRIPTION: $(AZ_SUBSCRIPTION)
-    ACR_NAME: $(ACR_NAME)
+    ACR_USERNAME: $(ACR_USERNAME)
   displayName: 'docker login'
 
 - task: DockerCompose@0
   displayName: Build services
   inputs:
     action: Build services
-    azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
-    azureContainerRegistry: $(azureContainerRegistry)
+    azureSubscriptionEndpoint: $(AZ_SUBSCRIPTION)
+    azureContainerRegistry: $(ACR_URL)
     dockerComposeFile: docker-compose.yml
     projectName: $(Build.Repository.Name)
     qualifyImageNames: true
@@ -38,8 +35,8 @@ steps:
   displayName: Push services
   inputs:
     action: Push services
-    azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
-    azureContainerRegistry: $(azureContainerRegistry)
+    azureSubscriptionEndpoint: $(AZ_SUBSCRIPTION)
+    azureContainerRegistry: $(ACR_URL)
     dockerComposeFile: docker-compose.yml
     projectName: $(Build.Repository.Name)
     qualifyImageNames: true

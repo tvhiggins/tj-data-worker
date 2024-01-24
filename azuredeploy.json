@@ -1,6 +1,6 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
     "parameters": {
         "containerappName": {
             "defaultValue": "tj-worker-container-app",
@@ -22,11 +22,15 @@
             "defaultValue": "",
             "type": "String"
         },
-        "DB_USER": {
+        "DB_USERNAME": {
             "defaultValue": "",
             "type": "String"
         },
         "DB_PASSWORD": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "AZURE_STORAGE_CONN_STR": {
             "defaultValue": "",
             "type": "String"
         },
@@ -49,18 +53,21 @@
         "ACR_PASSWORD": {
             "defaultValue": "",
             "type": "String"
+        },
+        "MODULE_TO_RUN": {
+            "defaultValue": "swap_getter",
+            "type": "String"
         }
     },
-    "variables": {},
-    "resources": [
-        {
-            "apiVersion": "2021-03-01",
-            "type": "Microsoft.Web/containerApps",
-            "name": "[parameters('containerappName')]",
-            "location": "[parameters('location')]",
-            "properties": {
-                "kubeEnvironmentId": "[resourceId('Microsoft.Web/kubeEnvironments', parameters('environment_name'))]",
-                "configuration": {
+  "resources": [
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[parameters('containerAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', parameters('environment_name'))]",
+        "configuration": {
                     "secrets": [
                         {
                             "name": "acr-password",
@@ -87,21 +94,21 @@
                         ]
                     }
                 },
-                "template": {
-                    "revisionSuffix": "[parameters('REVISION_NAME')]",
-                    "containers": [
-                        {
-                            "image": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
-                            "name": "simple-hello-world-container",
-                            "resources": {
-                            "cpu": 0.25,
-                            "memory": ".5Gi"
-                                        }
-                        },
-                        {
-                            "name": "tj-worker",
-                            "image": "[parameters('IMAGE_NAME')]",
-                            "env": [
+        "template": {
+          "revisionSuffix": "[parameters('REVISION_NAME')]",
+          "containers": [
+            {
+              "name": "simple-hello-world-container",
+              "image": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+              "resources": {
+                "cpu": "[json('.25')]",
+                "memory": ".5Gi"
+              }
+            },
+            {
+              "name": "tj-worker",
+              "image": "[parameters('IMAGE_NAME')]",
+              "env": [
                                 {
                                     "name": "DB_SERVER",
                                     "value": "[parameters('DB_SERVER')]"
@@ -111,33 +118,44 @@
                                     "value": "[parameters('DB_NAME')]"
                                 },
                                 {
-                                    "name": "DB_USER",
-                                    "value": "[parameters('DB_USER')]"
+                                    "name": "DB_USERNAME",
+                                    "value": "[parameters('DB_USERNAME')]"
                                 },
                                 {
                                     "name": "DB_PASSWORD",
                                     "value": "[parameters('DB_PASSWORD')]"
                                 },
                                 {
+                                    "name": "AZURE_STORAGE_CONN_STR",
+                                    "value": "[parameters('AZURE_STORAGE_CONN_STR')]"
+                                },
+                                {
                                     "name": "HTTP_PORT",
                                     "value": "80"
+                                },
+                                {
+                                    "name": "MODULE_TO_RUN",
+                                    "value": "[parameters('MODULE_TO_RUN')]"
                                 }
                             ],
-                            "resources": {
-                                "cpu": 0.5,
-                                "memory": "1Gi"
-                            }
-                        }
-                    ],
-                    "scale": {
-                        "minReplicas": 1,
-                        "maxReplicas": 1
-                    },
-                    "dapr": {
-                        "enabled": false
-                    }
-                }
+              "resources": {
+                "cpu": "[json('.5')]",
+                "memory": "1Gi"
+              }
             }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
         }
-    ]
+      }
+    }
+  ],
+  "outputs": {
+    "containerAppFQDN": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', parameters('containerAppName'))).configuration.ingress.fqdn]"
+    }
+  }
 }

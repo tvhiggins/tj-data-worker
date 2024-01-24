@@ -10,63 +10,15 @@ from ..utils import log
 logger = log.setup_custom_logger(name=__file__)
 
 
-def get_last_block_number():
+def get_last_inserted_block_number():
     db_session = db.get_db_session()
-    max_transact_idx = db_session.query(func.max(swaps.factSwaps.transact_idx)).first()[0]
-
-    if max_transact_idx is None:
-        db_session.remove()
-        return 8973570
-
-    max_block_number = (
-        db_session.query(func.max(transactions.dimTransactions.block_number))
-        .where(transactions.dimTransactions.transact_idx == max_transact_idx)
-        .first()[0]
-    )
+    max_block_number = db_session.query(func.max(swaps.factSwaps.block_number)).first()[0]
+    db_session.remove()
 
     if max_block_number is None:
-        db_session.remove()
-        return 8973570
+        max_block_number = 0
 
-    db_session.remove()
     return max_block_number
-
-
-def delete_last_block():
-    max_block_number = get_last_block_number()
-
-    min_transact_idx_to_delete = None
-    min_swap_idx_to_delete = None
-
-    db_session = db.get_db_session()
-
-    min_transact_idx_to_delete = (
-        db_session.query(func.min(transactions.dimTransactions.transact_idx))
-        .where(transactions.dimTransactions.block_number >= max_block_number)
-        .first()[0]
-    )
-
-    if min_transact_idx_to_delete is not None:
-        min_swap_idx_to_delete = (
-            db_session.query(func.min(swaps.factSwaps.swap_idx))
-            .where(swaps.factSwaps.transact_idx >= min_transact_idx_to_delete)
-            .first()[0]
-        )
-
-    logger.info("Deleting block_numbers >= {b}".format(b=max_block_number))
-
-    db_session.query(blocks.dimBlocks).where(blocks.dimBlocks.block_number >= max_block_number).delete()
-
-    if min_transact_idx_to_delete is not None:
-        db_session.query(transactions.dimTransactions).where(
-            transactions.dimTransactions.transact_idx >= min_transact_idx_to_delete
-        ).delete()
-    if min_swap_idx_to_delete is not None:
-        db_session.query(swaps.factSwaps).where(swaps.factSwaps.swap_idx >= min_swap_idx_to_delete).delete()
-
-    db_session.commit()
-
-    db_session.remove()
 
 
 def get_pair_ids_to_dict():
@@ -79,10 +31,25 @@ def get_pair_ids_to_dict():
 
     for row in data:
 
-        pairs_dict[codecs.encode(row.id, "hex_codec")] = row.pair_idx
+        pairs_dict["0x" + codecs.encode(row.id, "hex_codec").decode("ascii")] = row.pair_idx
 
     db_session.remove()
     return pairs_dict
+
+
+def get_token_ids_to_dict():
+
+    tokens_dict = dict()
+
+    db_session = db.get_db_session()
+
+    data = db_session.query(tokens.dimTokens.id, tokens.dimTokens.token_idx).all()
+
+    for row in data:
+        tokens_dict["0x" + codecs.encode(row.id, "hex_codec").decode("ascii")] = row.token_idx
+
+    db_session.remove()
+    return tokens_dict
 
 
 def insert_dim_tokens(token_object: tokens.dimTokens) -> int:
@@ -117,14 +84,29 @@ def insert_dim_pairs(pair_object: pairs.dimPairs) -> int:
     return pair_idx
 
 
-def insert_dim_blocks(list_of_objects: list):
-    df = pd.DataFrame(list_of_objects)
+def insert_dim_blocks(blocks_df: pd.DataFrame, check_integrity: bool = False, check_integrity_count: int = 0):
+
+    if check_integrity:
+        block_numbers = blocks_df["block_number"].tolist()
+
+        blocks_numbers_to_delete = list()
+        db_session = db.get_db_session()
+
+        for i in range(0, len(block_numbers), 1000):
+            to_check = block_numbers[i : i + 1000]
+            data = db_session.query(blocks.dimBlocks).where(blocks.dimBlocks.block_number.in_(to_check)).all()
+            blocks_numbers_to_delete.extend([row.block_number for row in data])
+
+        db_session.remove()
+
+        blocks_df = blocks_df[~blocks_df["block_number"].isin(blocks_numbers_to_delete)]
 
     non_scoped_db_session = db.get_non_scoped_db_session()
+
     conn = non_scoped_db_session.connect()
 
     try:
-        df.to_sql(
+        blocks_df.to_sql(
             blocks.dimBlocks.__tablename__,
             schema=blocks.dimBlocks.__table_args__["schema"],
             con=conn,
@@ -134,9 +116,14 @@ def insert_dim_blocks(list_of_objects: list):
             chunksize=100,
         )
     except exc.IntegrityError as e:
-        logger.error(e)
-        logger.error(list_of_objects)
-        exit(1)
+        if check_integrity < 2:
+            logger.info("Integrity Error, retrying....")
+            check_integrity_count += 1
+            insert_dim_blocks(blocks_df=blocks_df, check_integrity=True, check_integrity_count=check_integrity_count)
+        else:
+            logger.error(e)
+            logger.error(blocks_df)
+            exit(1)
 
     conn.close()
     non_scoped_db_session.dispose()
@@ -166,50 +153,12 @@ def get_max_swap_idx() -> int:
         return row[0]
 
 
-def get_transacts_to_dict(transact_idx_greater_than=0) -> dict:
-    transact_dict = dict()
-
-    db_session = db.get_db_session()
-    data = (
-        db_session.query(transactions.dimTransactions.id, transactions.dimTransactions.transact_idx)
-        .where(transactions.dimTransactions.transact_idx > transact_idx_greater_than)
-        .all()
-    )
-
-    for row in data:
-        transact_dict[row.id] = row.transact_idx
-
-    db_session.remove()
-    return transact_dict
-
-
-def insert_dim_transacts(list_of_objects: list):
-    df = pd.DataFrame(list_of_objects)
+def insert_fact_swaps(swaps_df: pd.DataFrame):
 
     non_scoped_db_session = db.get_non_scoped_db_session()
     conn = non_scoped_db_session.connect()
 
-    df.to_sql(
-        transactions.dimTransactions.__tablename__,
-        schema=transactions.dimTransactions.__table_args__["schema"],
-        con=conn,
-        method="multi",
-        index=False,
-        if_exists="append",
-        chunksize=100,
-    )
-
-    conn.close()
-    non_scoped_db_session.dispose()
-
-
-def insert_fact_swaps(list_of_objects: list):
-    df = pd.DataFrame(list_of_objects)
-
-    non_scoped_db_session = db.get_non_scoped_db_session()
-    conn = non_scoped_db_session.connect()
-
-    df.to_sql(
+    swaps_df.to_sql(
         swaps.factSwaps.__tablename__,
         schema=swaps.factSwaps.__table_args__["schema"],
         con=conn,
